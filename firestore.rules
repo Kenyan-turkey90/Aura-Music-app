@@ -1,0 +1,134 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: tracks
+    // Document ID: trackId
+    // Fields:
+    //   - id: string (required) - Unique identifier
+    //   - title: string (required, size < 100) - Song title
+    //   - artist: string (required, size < 100) - Artist name
+    //   - album: string (optional, size < 100) - Album name
+    //   - cover: string (optional, isValidUrl) - Cover art URL
+    //   - previewUrl: string (required, isValidUrl) - Audio file URL
+    //   - duration: number (required, isPositive) - Song duration
+    //   - source: string (required, enum: ['itunes', 'cloud']) - Track source
+    //   - userId: string (required, matches auth.uid) - Uploader UID
+    //   - createdAt: string (required, isValidDateString) - Upload timestamp
+    //
+    // Collection: users
+    // Document ID: userId
+    // Fields:
+    //   - uid: string (required, matches auth.uid) - User UID
+    //   - email: string (required, isValidEmail) - User email
+    //   - displayName: string (optional, size < 50) - User name
+    //   - photoURL: string (optional, isValidUrl) - Profile photo URL
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isDocOwner() {
+      return isAuthenticated() && request.auth.uid == resource.data.userId;
+    }
+
+    function uidUnchanged() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == request.auth.uid;
+    }
+
+    function uidNotModified() {
+      return !('userId' in request.resource.data) || request.resource.data.userId == resource.data.userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidDateString(dateStr) {
+      return dateStr is string && dateStr.matches("^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}.*Z?$");
+    }
+
+    function isPositive(val) {
+      return val is number && val >= 0;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "machariachris90@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidTrack(data) {
+      return hasRequiredFields(['id', 'title', 'artist', 'previewUrl', 'source', 'userId', 'createdAt']) &&
+             hasOnlyAllowedFields(['id', 'title', 'artist', 'album', 'cover', 'previewUrl', 'duration', 'source', 'userId', 'createdAt']) &&
+             data.id is string && data.id.size() > 0 && data.id.size() < 100 &&
+             data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.artist is string && data.artist.size() > 0 && data.artist.size() < 100 &&
+             isValidUrl(data.previewUrl) &&
+             data.source in ['itunes', 'cloud'] &&
+             data.userId == request.auth.uid &&
+             isValidDateString(data.createdAt);
+    }
+
+    function isValidUser(data) {
+      return hasRequiredFields(['uid', 'email']) &&
+             hasOnlyAllowedFields(['uid', 'email', 'displayName', 'photoURL', 'role']) &&
+             data.uid == request.auth.uid &&
+             isValidEmail(data.email) &&
+             (!('displayName' in data) || (data.displayName is string && data.displayName.size() < 50)) &&
+             (!('photoURL' in data) || isValidUrl(data.photoURL));
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /tracks/{trackId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidTrack(request.resource.data);
+      allow update: if isAuthenticated() && isDocOwner() && isValidTrack(request.resource.data) && uidNotModified();
+      allow delete: if isAuthenticated() && (isDocOwner() || isAdmin());
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(userId) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

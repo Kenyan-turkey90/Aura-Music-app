@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "Track": {
+      "title": "Track",
+      "description": "Metadata for a user-uploaded music track",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the track"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the song"
+        },
+        "artist": {
+          "type": "string",
+          "description": "Name of the artist"
+        },
+        "album": {
+          "type": "string",
+          "description": "Name of the album"
+        },
+        "cover": {
+          "type": "string",
+          "description": "URL to the cover art"
+        },
+        "previewUrl": {
+          "type": "string",
+          "description": "Signed URL to the full-length audio file in Firebase Storage"
+        },
+        "duration": {
+          "type": "number",
+          "description": "Duration of the track in seconds"
+        },
+        "source": {
+          "type": "string",
+          "enum": ["itunes", "cloud"],
+          "description": "Source of the track"
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the user who uploaded the track"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp of when the track was uploaded"
+        }
+      },
+      "required": ["id", "title", "artist", "previewUrl", "source", "userId", "createdAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User's email address"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User's display name"
+        },
+        "photoURL": {
+          "type": "string",
+          "description": "URL to the user's profile photo"
+        }
+      },
+      "required": ["uid", "email"]
+    }
+  },
+  "firestore": {
+    "/tracks/{trackId}": {
+      "schema": "Track",
+      "description": "Collection of music tracks uploaded by users"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile documents"
+    }
+  }
+}
